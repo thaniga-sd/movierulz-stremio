@@ -1,0 +1,9 @@
+{
+  "name": "movierulz-stremio",
+  "version": "1.0.0",
+  "dependencies": {
+    "stremio-addon-sdk": "^3.0.0",
+    "cheerio": "^1.0.0",
+    "axios": "^1.6.0"
+  }
+}
