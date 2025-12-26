@@ -4,23 +4,24 @@ const cheerio = require("cheerio");
 
 const manifest = {
     id: "com.movierulz.tamil.vercel",
-    version: "1.6.1",
-    name: "MovieRulz Tamil",
-    description: "Browse MovieRulz movies",
+    version: "1.3.0",
+    name: "MovieRulz Tamil Featured",
+    description: "Search and Browse Tamil movies (Advanced Scraper)",
     resources: ["catalog"],
     types: ["movie"],
-    idPrefixes: ["mr"],
+    idPrefixes: ["tt"],
     catalogs: [{ 
         type: "movie", 
         id: "mr-tamil", 
-        name: "Tamil Featured",
-        extra: [{ name: "search", isRequired: false }] 
+        name: "Tamil Featured (MovieRulz)",
+        extra: [{ name: "search", isRequired: false }]
     }]
 };
 
 const builder = new addonBuilder(manifest);
 
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
+    // We try the most stable URL for MovieRulz
     let targetUrl = "https://www.5movierulz.hockey/category/tamil-featured";
     if (extra && extra.search) {
         targetUrl = `https://www.5movierulz.hockey/?s=${encodeURIComponent(extra.search)}`;
@@ -28,25 +29,37 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 
     try {
         const response = await axios.get(targetUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 5000 
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.google.com/'
+            },
+            timeout: 8000
         });
+
         const $ = cheerio.load(response.data);
         const metas = [];
-        $("article, .post-article").each((i, el) => {
-            const title = $(el).find(".entry-title a, h2 a").first().text().trim();
-            const poster = $(el).find("img").attr("src");
-            if (title && i < 20) {
+
+        // This selector is very broad to catch any version of the site
+        $("li, article, .post-article, .item").each((i, el) => {
+            const link = $(el).find("a").first();
+            const title = link.text().trim() || $(el).find("img").attr("alt");
+            let poster = $(el).find("img").attr("src");
+
+            // Filter out junk results (like "Home" or "Contact")
+            if (title && title.length > 3 && poster && !title.includes("Home")) {
                 metas.push({
-                    id: `mr:${title.replace(/[^a-zA-Z0-9]/g, '')}`,
+                    id: `mr_${Math.random().toString(36).substr(2, 9)}`,
                     type: "movie",
                     name: title,
                     poster: poster
                 });
             }
         });
-        return { metas };
+
+        return { metas: metas.slice(0, 40) }; // Return up to 40 movies
     } catch (e) {
+        console.error("Scraper Error:", e.message);
         return { metas: [] };
     }
 });
@@ -54,26 +67,22 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 const addonInterface = builder.getInterface();
 
 module.exports = async (req, res) => {
-    try {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    const url = req.url;
 
-        const url = req.url || '';
-
-        if (url.includes('manifest.json') || url === '/' || url === '') {
-            return res.status(200).json(manifest);
-        }
-
-        if (url.includes('/catalog/')) {
-            const searchMatch = url.match(/search=([^/.]+)/);
-            const query = searchMatch ? decodeURIComponent(searchMatch[1]) : null;
-            const catalog = await addonInterface.get('catalog', 'movie', 'mr-tamil', { search: query });
-            return res.status(200).json(catalog);
-        }
-
-        return res.status(404).json({ error: "Not found" });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Internal Error", details: err.message });
+    if (url.includes('manifest.json') || url === '/' || url === '') {
+        return res.json(addonInterface.manifest);
     }
+
+    if (url.includes('/catalog/')) {
+        // This regex helps extract the search term even if the URL is messy
+        const searchMatch = url.match(/search=([^/.]+)/);
+        const query = searchMatch ? decodeURIComponent(searchMatch[1]) : null;
+        
+        const catalog = await addonInterface.get('catalog', 'movie', 'mr-tamil', { search: query });
+        return res.json(catalog);
+    }
+
+    res.status(404).json({ error: "Not found" });
 };
