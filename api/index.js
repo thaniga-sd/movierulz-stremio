@@ -49,17 +49,19 @@ const addonInterface = builder.getInterface();
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
-    const url = req.url;
-
-    if (url.includes('manifest.json')) {
+    
+    // This allows the link to work whether it has /manifest.json at the end or not
+    if (req.url.includes('manifest.json') || req.url === '/' || req.url === '') {
         return res.json(addonInterface.manifest);
     }
-    if (url.includes('/catalog/')) {
-        const parts = url.split('/');
+    
+    if (req.url.includes('/catalog/')) {
+        const parts = req.url.split('/');
         const type = parts[parts.indexOf('catalog') + 1];
         const id = parts[parts.indexOf('catalog') + 2].replace('.json', '');
         const catalog = await addonInterface.get('catalog', type, id);
         return res.json(catalog);
     }
-    res.status(404).json({ error: "Not found" });
+    
+    res.status(404).json({ error: "Route not found", url: req.url });
 };
