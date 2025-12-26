@@ -6,19 +6,23 @@ const manifest = {
     id: "com.movierulz.tamil.vercel",
     version: "1.0.0",
     name: "MovieRulz Tamil Featured",
-    description: "Latest Tamil Featured movies (Free Vercel Host)",
+    description: "Latest Tamil Featured movies from MovieRulz",
     resources: ["catalog"],
     types: ["movie"],
     idPrefixes: ["tt"],
-    catalogs: [{ type: "movie", id: "mr-tamil", name: "Tamil Featured (MovieRulz)" }]
+    catalogs: [{ 
+        type: "movie", 
+        id: "mr-tamil", 
+        name: "Tamil Featured (MovieRulz)" 
+    }]
 };
 
 const builder = new addonBuilder(manifest);
 
+// Catalog Handler
 builder.defineCatalogHandler(async ({ type, id }) => {
     if (type === "movie" && id === "mr-tamil") {
         try {
-            // Updated URL for the site
             const { data } = await axios.get("https://www.5movierulz.hockey/category/tamil-featured", {
                 headers: { 'User-Agent': 'Mozilla/5.0' }
             });
@@ -29,13 +33,12 @@ builder.defineCatalogHandler(async ({ type, id }) => {
                 const title = $(el).find(".entry-title a").text().trim();
                 const poster = $(el).find(".post-thumbnail img").attr("src");
                 metas.push({
-                    id: `mr_tamil_${i}`, // Note: Streams will only work if you use IMDb IDs
+                    id: `mr_tamil_${i}`, 
                     type: "movie",
                     name: title,
                     poster: poster
                 });
             });
-
             return { metas };
         } catch (e) {
             return { metas: [] };
@@ -46,22 +49,31 @@ builder.defineCatalogHandler(async ({ type, id }) => {
 
 const addonInterface = builder.getInterface();
 
+// Vercel Serverless Function Wrapper
 module.exports = async (req, res) => {
+    // 1. Set CORS Headers so Stremio can read the data
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Content-Type', 'application/json');
-    
-    // This allows the link to work whether it has /manifest.json at the end or not
-    if (req.url.includes('manifest.json') || req.url === '/' || req.url === '') {
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    const url = req.url;
+
+    // 2. Handle Manifest Request
+    if (url.endsWith('manifest.json') || url === '/' || url === '') {
         return res.json(addonInterface.manifest);
     }
-    
-    if (req.url.includes('/catalog/')) {
-        const parts = req.url.split('/');
-        const type = parts[parts.indexOf('catalog') + 1];
-        const id = parts[parts.indexOf('catalog') + 2].replace('.json', '');
-        const catalog = await addonInterface.get('catalog', type, id);
+
+    // 3. Handle Catalog Request (Crucial for the "Discover" tab)
+    if (url.includes('/catalog/')) {
+        // This automatically pulls the right data from the handler above
+        const catalog = await addonInterface.get('catalog', 'movie', 'mr-tamil');
         return res.json(catalog);
     }
-    
-    res.status(404).json({ error: "Route not found", url: req.url });
+
+    res.status(404).json({ error: "Not found", path: url });
 };
