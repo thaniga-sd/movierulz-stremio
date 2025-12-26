@@ -6,7 +6,7 @@ const manifest = {
     id: "com.movierulz.tamil.vercel",
     version: "1.0.0",
     name: "MovieRulz Tamil Featured",
-    description: "Latest Tamil Featured movies from MovieRulz",
+    description: "Latest Tamil Featured movies (Free Vercel Host)",
     resources: ["catalog"],
     types: ["movie"],
     idPrefixes: ["tt"],
@@ -18,6 +18,7 @@ const builder = new addonBuilder(manifest);
 builder.defineCatalogHandler(async ({ type, id }) => {
     if (type === "movie" && id === "mr-tamil") {
         try {
+            // Updated URL for the site
             const { data } = await axios.get("https://www.5movierulz.hockey/category/tamil-featured", {
                 headers: { 'User-Agent': 'Mozilla/5.0' }
             });
@@ -27,9 +28,8 @@ builder.defineCatalogHandler(async ({ type, id }) => {
             $(".post-article").each((i, el) => {
                 const title = $(el).find(".entry-title a").text().trim();
                 const poster = $(el).find(".post-thumbnail img").attr("src");
-                // We use a dummy ID here; in a perfect version, you'd fetch the IMDb ID
                 metas.push({
-                    id: `mr_tamil_${i}`, 
+                    id: `mr_tamil_${i}`, // Note: Streams will only work if you use IMDb IDs
                     type: "movie",
                     name: title,
                     poster: poster
@@ -47,16 +47,19 @@ builder.defineCatalogHandler(async ({ type, id }) => {
 const addonInterface = builder.getInterface();
 
 module.exports = async (req, res) => {
-    const url = req.url;
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Content-Type', 'application/json');
+    const url = req.url;
 
-    if (url.endsWith('manifest.json')) return res.send(addonInterface.manifest);
-    if (url.includes('/catalog/')) {
-        const [,, type, id] = url.split('/');
-        const catalog = await addonInterface.get('catalog', type, id.replace('.json', ''));
-        return res.send(catalog);
+    if (url.includes('manifest.json')) {
+        return res.json(addonInterface.manifest);
     }
-    res.status(404).send({ error: "Not found" });
+    if (url.includes('/catalog/')) {
+        const parts = url.split('/');
+        const type = parts[parts.indexOf('catalog') + 1];
+        const id = parts[parts.indexOf('catalog') + 2].replace('.json', '');
+        const catalog = await addonInterface.get('catalog', type, id);
+        return res.json(catalog);
+    }
+    res.status(404).json({ error: "Not found" });
 };
